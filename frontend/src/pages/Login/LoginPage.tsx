@@ -1,15 +1,17 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import styles from "./LoginPage.module.css";
 import { Input } from "../../components/ui/Input/Input";
 import { Button } from "../../components/ui/Button/Button";
 import { login } from "../../api/authApi";
 import { GITHUB_OAUTH_URL } from "../../config/env";
+import { useNavigate } from "react-router-dom";
 
 export function LoginPage() {
     const [loginValue, setLoginValue] = useState("");
     const [password, setPassword] = useState("");
     const [loading, setLoading] = useState(false);
     const [formError, setFormError] = useState<string | null>(null);
+    const navigate = useNavigate();
 
     const canSubmit = useMemo(() => {
         return loginValue.trim().length > 0 && password.trim().length > 0 && !loading;
@@ -25,7 +27,7 @@ export function LoginPage() {
 
             localStorage.setItem("token", res.token);
 
-            // todo  — навигация
+            navigate("/users", { replace: true });
         } catch (err) {
             const msg = err instanceof Error ? err.message : "Ошибка входа";
             setFormError(msg);
@@ -35,8 +37,27 @@ export function LoginPage() {
     }
 
     function onGithubLogin() {
-        // todo вход через гитхаб
+        window.location.href = GITHUB_OAUTH_URL;
     }
+
+    useEffect(() => {
+        const params = new URLSearchParams(window.location.search);
+        const token = params.get("token");
+        const error = params.get("error");
+
+        if (error) {
+            setFormError(`OAuth ошибка: ${error}`);
+            return;
+        }
+
+        if (token) {
+            localStorage.setItem("token", token);
+
+            window.history.replaceState({}, document.title, window.location.pathname);
+
+            navigate("/users", { replace: true });
+        }
+    }, [navigate]);
 
     return (
         <div className={styles.page}>
@@ -64,7 +85,7 @@ export function LoginPage() {
 
                 {formError ? <div className={styles.formError}>{formError}</div> : null}
 
-                <Button type="submit" disabled={!canSubmit}>
+                <Button type="submit" disabled={!canSubmit} style={{ marginTop: 4 }}>
                     {loading ? "Входим..." : "Войти"}
                 </Button>
 
