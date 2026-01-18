@@ -30,6 +30,11 @@ public class Constants {
             + TABLE_USERS_ROLES + ".`roles_id` = " + TABLE_ROLES + ".`id` LEFT JOIN " + TABLE_LAST_VISIT + " ON "
             + TABLE_USERS + ".`last_visit_id` = " + TABLE_LAST_VISIT + ".`id` WHERE " + TABLE_USERS
             + ".`id`=UUID_TO_BIN(?);";
+    public static final String GET_USER_BY_EMAIL_FULL = "SELECT * FROM " + TABLE_USERS + " LEFT JOIN " + TABLE_USERS_ROLES
+            + " ON " + TABLE_USERS_ROLES + ".`users_id` = " + TABLE_USERS + ".`id` LEFT JOIN " + TABLE_ROLES + " ON "
+            + TABLE_USERS_ROLES + ".`roles_id` = " + TABLE_ROLES + ".`id` LEFT JOIN " + TABLE_LAST_VISIT + " ON "
+            + TABLE_USERS + ".`last_visit_id` = " + TABLE_LAST_VISIT + ".`id` WHERE " + TABLE_USERS
+            + ".`email`=?;";
     public static final String CREATE_USER = "INSERT INTO " + TABLE_USERS
             + " (`id`, `name`, `email`, `password`, `created`, `last_visit_id`) VALUES "
             + "(UUID_TO_BIN(?), ?, ?, ?, ?, UUID_TO_BIN(?));";

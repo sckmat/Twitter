@@ -16,3 +16,8 @@ ums:
   paths:
     user: /users/user
 
+security:
+  jwt:
+    secret: ${JWT_SECRET:secret}
+    issuer: ${JWT_ISSUER:ums}
+    ttl-seconds: ${JWT_TTL_SECONDS:86400}

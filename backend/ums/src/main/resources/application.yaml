@@ -9,3 +9,18 @@ spring:
     url: jdbc:mysql://0.0.0.0:3306/ums?serverTimezone=UTC&useLegacyDatetimeCode=false
     username: root
     password: passw
+
+# GitHub OAuth
+oauth:
+  github:
+    client-id: ${GITHUB_CLIENT_ID:Ov23lijRIy7eyahBQs7n}
+    client-secret: ${GITHUB_CLIENT_SECRET:3996e1a8aace9e8810012f0e786f6699d1541622}
+    redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:8000/auth/github/callback}
+    frontend-redirect: ${FRONTEND_REDIRECT_URI:http://localhost:3000/}
+    scope: ${GITHUB_SCOPE:read:user user:email}
+
+security:
+  jwt:
+    secret: ${JWT_SECRET:secret}
+    issuer: ${JWT_ISSUER:ums}
+    ttl-seconds: ${JWT_TTL_SECONDS:86400}

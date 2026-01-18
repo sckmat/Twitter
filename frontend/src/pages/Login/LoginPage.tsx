@@ -68,7 +68,7 @@ export function LoginPage() {
                 <div className={styles.fields}>
                     <Input
                         label="Логин"
-                        placeholder="email или username"
+                        placeholder="email"
                         value={loginValue}
                         onChange={(e) => setLoginValue(e.target.value)}
                         autoComplete="username"

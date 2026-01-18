@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
@@ -14,17 +13,26 @@ import reactor.core.publisher.Mono;
 @Service
 public class UMSConnector {
 
-    @Value("${ums.host}")
-    private String uriUmsHost;
+    private final WebClient client;
 
-    @Value("${ums.port}")
-    private String uriUmsPort;
+    public UMSConnector(
+            WebClient.Builder builder,
+            @Value("${ums.host}") String umsHost,
+            @Value("${ums.port}") String umsPort
+    ) {
+        this.client = builder
+                .baseUrl(umsHost + ":" + umsPort)
+                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                .build();
+    }
 
-    public Mono<Object> retrieveUmsData(String uri) {
-        WebClient client = WebClient.builder().baseUrl(uriUmsHost + ":" + uriUmsPort)
-                .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE).build();
-
-	    return client.method(HttpMethod.GET).uri(uri).accept(MediaType.APPLICATION_JSON)
-	            .acceptCharset(StandardCharsets.UTF_8).retrieve().bodyToMono(Object.class);
+    public Mono<Object> retrieveUmsData(String uri, String authorizationHeader) {
+        return client.get()
+                .uri(uri)
+                .header(HttpHeaders.AUTHORIZATION, authorizationHeader)
+                .accept(MediaType.APPLICATION_JSON)
+                .acceptCharset(StandardCharsets.UTF_8)
+                .retrieve()
+                .bodyToMono(Object.class);
     }
 }
