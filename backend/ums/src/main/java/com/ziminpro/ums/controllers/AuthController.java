@@ -167,10 +167,12 @@ public class AuthController {
         Map<String, Roles> roles = umsRepository.findAllRoles();
 
         Roles defaultRole = roles.getOrDefault(
-                "USER",
+                "PRODUCER",
                 roles.getOrDefault(
-                        "ROLE_USER",
-                        roles.values().stream().findFirst().orElse(new Roles(null, "USER", "Default"))
+                        "ROLE_PRODUCER",
+                        roles.values().stream()
+                                .findFirst()
+                                .orElse(new Roles(null, "PRODUCER", "Default"))
                 )
         );
 
