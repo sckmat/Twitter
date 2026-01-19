@@ -39,10 +39,10 @@ public class SecurityConfig {
                 .authorizeExchange(ex -> ex
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        .pathMatchers(HttpMethod.POST, "/messages/**").hasRole("PRODUCER")
-                        .pathMatchers(HttpMethod.DELETE, "/messages/**").hasRole("PRODUCER")
+                        .pathMatchers(HttpMethod.POST, "/messages/**").hasAnyRole("PRODUCER", "ADMIN")
+                        .pathMatchers(HttpMethod.DELETE, "/messages/**").hasAnyRole("PRODUCER", "ADMIN")
 
-                        .pathMatchers("/subscriptions/**").hasRole("SUBSCRIBER")
+                        .pathMatchers("/subscriptions/**").hasAnyRole("SUBSCRIBER", "ADMIN")
 
                         .anyExchange().authenticated()
                 )
