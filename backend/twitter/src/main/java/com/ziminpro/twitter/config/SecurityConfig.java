@@ -26,17 +26,29 @@ public class SecurityConfig {
     public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) {
         return http
                 .cors(Customizer.withDefaults())
+
                 .csrf(ServerHttpSecurity.CsrfSpec::disable)
                 .httpBasic(ServerHttpSecurity.HttpBasicSpec::disable)
                 .formLogin(ServerHttpSecurity.FormLoginSpec::disable)
                 .logout(ServerHttpSecurity.LogoutSpec::disable)
-                .securityContextRepository(NoOpServerSecurityContextRepository.getInstance())
+
+                .securityContextRepository(
+                        NoOpServerSecurityContextRepository.getInstance()
+                )
+
                 .authorizeExchange(ex -> ex
                         .pathMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .pathMatchers("/auth/**").permitAll()
+
+                        .pathMatchers(HttpMethod.POST, "/messages/**").hasRole("PRODUCER")
+                        .pathMatchers(HttpMethod.DELETE, "/messages/**").hasRole("PRODUCER")
+
+                        .pathMatchers("/subscriptions/**").hasRole("SUBSCRIBER")
+
                         .anyExchange().authenticated()
                 )
+
                 .addFilterAt(jwtWebFilter, SecurityWebFiltersOrder.AUTHENTICATION)
+
                 .build();
     }
 }

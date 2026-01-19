@@ -8,14 +8,11 @@ import java.util.UUID;
 
 import com.ziminpro.twitter.dao.MessageRepository;
 import com.ziminpro.twitter.dtos.Constants;
-import com.ziminpro.twitter.dtos.HttpResponseExtractor;
 import com.ziminpro.twitter.dtos.Message;
-import com.ziminpro.twitter.dtos.Roles;
-import com.ziminpro.twitter.dtos.User;
 
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Service;
 
 import reactor.core.publisher.Mono;
@@ -24,35 +21,52 @@ import reactor.core.publisher.Mono;
 public class MessagesService {
 
     private final MessageRepository messageRepository;
-    private final UMSConnector umsConnector;
-    private final String uriUser;
 
-    public MessagesService(
-            MessageRepository messageRepository,
-            UMSConnector umsConnector,
-            @Value("${ums.paths.user}") String uriUser
-    ) {
+    public MessagesService(MessageRepository messageRepository, UMSConnector umsConnector,
+                           @org.springframework.beans.factory.annotation.Value("${ums.paths.user}") String uriUser) {
         this.messageRepository = messageRepository;
-        this.umsConnector = umsConnector;
-        this.uriUser = uriUser;
+    }
+
+    private static Mono<UUID> currentUserId() {
+        return ReactiveSecurityContextHolder.getContext()
+                .map(ctx -> ctx.getAuthentication())
+                .filter(auth -> auth != null && auth.isAuthenticated())
+                .map(auth -> UUID.fromString(auth.getName()));
+    }
+
+    private static Mono<Boolean> isAdmin() {
+        return ReactiveSecurityContextHolder.getContext()
+                .map(ctx -> ctx.getAuthentication())
+                .map(auth -> auth != null && auth.getAuthorities().stream()
+                        .anyMatch(a -> "ROLE_ADMIN".equals(a.getAuthority())))
+                .defaultIfEmpty(false);
     }
 
     public Mono<ResponseEntity<Map<String, Object>>> createMessage(Message message, String authorization) {
-        return umsConnector
-                .retrieveUmsData(uriUser + "/" + message.getAuthor(), authorization)
-                .map(res -> {
-                    User user = HttpResponseExtractor.extractDataFromHttpClientResponse(res, User.class);
+        if (message == null) {
+            return Mono.just(okJson(resp("400", "Message body is required", false)));
+        }
+        if (message.getAuthor() == null) {
+            return Mono.just(okJson(resp("400", "Message author is required", false)));
+        }
 
-                    if (!user.hasRole(Roles.PRODUCER)) {
-                        return okJson(resp("403", "Only PRODUCER can create messages", false));
+        return Mono.zip(currentUserId(), isAdmin())
+                .flatMap(t -> {
+                    UUID currentUserId = t.getT1();
+                    boolean admin = t.getT2();
+
+                    UUID authorId = message.getAuthor();
+
+                    if (!admin && !currentUserId.equals(authorId)) {
+                        return Mono.just(okJson(resp("403", "You can create messages only as yourself", false)));
                     }
 
                     UUID messageId = messageRepository.createMessage(message);
                     if (messageId == null) {
-                        return okJson(resp("500", "Message has not been created", false));
+                        return Mono.just(okJson(resp("500", "Message has not been created", false)));
                     }
 
-                    return okJson(resp("201", "Message has been created", messageId.toString()));
+                    return Mono.just(okJson(resp("201", "Message has been created", messageId.toString())));
                 });
     }
 
@@ -77,32 +91,40 @@ public class MessagesService {
     }
 
     public Mono<ResponseEntity<Map<String, Object>>> getMessagesForSubscriberById(UUID subscriberId, String authorization) {
-        return umsConnector
-                .retrieveUmsData(uriUser + "/" + subscriberId, authorization)
-                .map(res -> {
-                    User user = HttpResponseExtractor.extractDataFromHttpClientResponse(res, User.class);
-
-                    if (!user.hasRole(Roles.SUBSCRIBER)) {
-                        return okJson(resp("403", "Only SUBSCRIBER can request subscriber feed", new ArrayList<>()));
-                    }
-
-                    List<Message> messages = messageRepository.getMessagesForSubscriberById(subscriberId);
-                    if (messages == null || messages.isEmpty()) {
-                        return okJson(resp("404", "Subscription not found or empty", new ArrayList<>()));
-                    }
-
-                    return okJson(resp("200", "List of messages has been requested successfully", messages));
-                });
+        List<Message> messages = messageRepository.getMessagesForSubscriberById(subscriberId);
+        if (messages == null || messages.isEmpty()) {
+            return Mono.just(okJson(resp("404", "Subscription not found or empty", new ArrayList<>())));
+        }
+        return Mono.just(okJson(resp("200", "List of messages has been requested successfully", messages)));
     }
 
     public Mono<ResponseEntity<Map<String, Object>>> deleteMessageById(UUID messageId, String authorization) {
-        int result = messageRepository.deleteMessageById(messageId);
+        return Mono.zip(currentUserId(), isAdmin())
+                .flatMap(t -> {
+                    UUID currentUserId = t.getT1();
+                    boolean admin = t.getT2();
 
-        if (result != 1) {
-            return Mono.just(okJson(resp("500", "Message " + messageId + " has not been deleted", false)));
-        }
+                    Message message = messageRepository.getMessagebyId(messageId);
+                    if (message == null || message.getId() == null) {
+                        return Mono.just(okJson(resp("404", "Message not found", false)));
+                    }
 
-        return Mono.just(okJson(resp("200", "Message " + messageId + " successfully deleted", true)));
+                    UUID ownerId = message.getAuthor();
+                    if (ownerId == null) {
+                        return Mono.just(okJson(resp("500", "Message owner is not set", false)));
+                    }
+
+                    if (!admin && !currentUserId.equals(ownerId)) {
+                        return Mono.just(okJson(resp("403", "You can delete only your own messages", false)));
+                    }
+
+                    int result = messageRepository.deleteMessageById(messageId);
+                    if (result != 1) {
+                        return Mono.just(okJson(resp("500", "Message " + messageId + " has not been deleted", false)));
+                    }
+
+                    return Mono.just(okJson(resp("200", "Message " + messageId + " successfully deleted", true)));
+                });
     }
 
     private static Map<String, Object> resp(String code, String message, Object data) {

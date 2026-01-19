@@ -1,6 +1,6 @@
 package com.ziminpro.ums.security;
 
-import java.util.Collections;
+import java.util.List;
 
 import com.auth0.jwt.JWT;
 import com.auth0.jwt.JWTVerifier;
@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.ReactiveSecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.web.server.ServerWebExchange;
@@ -32,12 +33,8 @@ public class JwtWebFilter implements WebFilter {
         if (secret == null || secret.isBlank()) {
             throw new IllegalStateException("security.jwt.secret is empty");
         }
-
         Algorithm algorithm = Algorithm.HMAC256(secret);
-
-        this.verifier = JWT.require(algorithm)
-                .withIssuer(issuer)
-                .build();
+        this.verifier = JWT.require(algorithm).withIssuer(issuer).build();
     }
 
     @Override
@@ -49,7 +46,6 @@ public class JwtWebFilter implements WebFilter {
         }
 
         String token = authHeader.substring("Bearer ".length()).trim();
-
         if (token.isEmpty()) {
             return chain.filter(exchange);
         }
@@ -57,17 +53,19 @@ public class JwtWebFilter implements WebFilter {
         try {
             DecodedJWT jwt = verifier.verify(token);
 
-            String subject = jwt.getSubject();
-            String email = jwt.getClaim("email").asString();
+            String principal = jwt.getSubject();
 
-            String principal = subject != null ? subject : (email != null ? email : "user");
+            List<String> roles = jwt.getClaim("roles").asList(String.class);
+
+            var authorities = roles == null ? List.<SimpleGrantedAuthority>of() :
+                    roles.stream()
+                            .filter(r -> r != null && !r.isBlank())
+                            .map(r -> r.startsWith("ROLE_") ? r : "ROLE_" + r)
+                            .map(SimpleGrantedAuthority::new)
+                            .toList();
 
             UsernamePasswordAuthenticationToken authentication =
-                    new UsernamePasswordAuthenticationToken(
-                            principal,
-                            null,
-                            Collections.emptyList()
-                    );
+                    new UsernamePasswordAuthenticationToken(principal, null, authorities);
 
             return chain.filter(exchange)
                     .contextWrite(ReactiveSecurityContextHolder.withAuthentication(authentication));

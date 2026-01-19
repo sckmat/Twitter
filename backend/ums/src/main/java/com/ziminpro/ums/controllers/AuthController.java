@@ -5,6 +5,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
+import java.util.stream.Collectors;
+import java.util.List;
 
 import com.ziminpro.ums.auth.GitHubOAuthService;
 import com.ziminpro.ums.auth.JwtService;
@@ -17,7 +19,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpCookie;
 import org.springframework.http.HttpHeaders;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -46,13 +47,20 @@ public class AuthController {
     @Value("${oauth.github.frontend-redirect:http://localhost:3000/}")
     private String frontendRedirect;
 
+    private final Map<String, Object> response = new HashMap<>();
+
     @RequestMapping(method = RequestMethod.POST, path = "/auth/login", consumes = Constants.APPLICATION_JSON)
-    public Mono<ResponseEntity<Map<String, Object>>> login(@RequestBody(required = false) Map<String, String> body) {
+    public Mono<ResponseEntity<Map<String, Object>>> login(@RequestBody Map<String, String> body) {
+        response.clear();
+
         String email = body == null ? null : body.get("login");
         String password = body == null ? null : body.get("password");
 
         if (email == null || email.trim().isEmpty() || password == null || password.trim().isEmpty()) {
-            return json(HttpStatus.BAD_REQUEST, "400", "Email and password are required", Map.of());
+            response.put(Constants.CODE, "400");
+            response.put(Constants.MESSAGE, "Email and password are required");
+            response.put(Constants.DATA, new HashMap<>());
+            return okJson(response);
         }
 
         email = email.trim().toLowerCase();
@@ -60,24 +68,42 @@ public class AuthController {
         User user = umsRepository.findUserByEmail(email);
 
         if (user == null || user.getId() == null) {
-            return json(HttpStatus.UNAUTHORIZED, "401", "Invalid credentials", Map.of());
+            response.put(Constants.CODE, "401");
+            response.put(Constants.MESSAGE, "User not found");
+            response.put(Constants.DATA, new HashMap<>());
+            return okJson(response);
         }
 
         if (user.getPassword() == null || !user.getPassword().equals(password)) {
-            return json(HttpStatus.UNAUTHORIZED, "401", "Invalid credentials", Map.of());
+            response.put(Constants.CODE, "401");
+            response.put(Constants.MESSAGE, "Invalid credentials");
+            response.put(Constants.DATA, new HashMap<>());
+            return okJson(response);
         }
 
-        String token = jwtService.issueToken(user.getId(), user.getEmail());
+        List<String> roleNames = user.getRoles() == null ? List.of() :
+                user.getRoles().stream()
+                        .map(Roles::getRole)
+                        .filter(r -> r != null && !r.isBlank())
+                        .distinct()
+                        .collect(Collectors.toList());
+
+        String token = jwtService.issueToken(user.getId(), user.getEmail(), roleNames);
+
         Map<String, Object> data = new HashMap<>();
         data.put("token", token);
 
-        return json(HttpStatus.OK, "200", "Login success", data);
+        response.put(Constants.CODE, "200");
+        response.put(Constants.MESSAGE, "Login success");
+        response.put(Constants.DATA, data);
+
+        return okJson(response);
     }
 
     @RequestMapping(method = RequestMethod.GET, path = "/auth/github")
     public Mono<ResponseEntity<Void>> githubStart() {
         if (!gitHubOAuthService.isConfigured()) {
-            return Mono.just(ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build());
+            return Mono.just(ResponseEntity.status(500).build());
         }
 
         String state = gitHubOAuthService.generateState();
@@ -91,7 +117,7 @@ public class AuthController {
                 .maxAge(300)
                 .build();
 
-        return Mono.just(ResponseEntity.status(HttpStatus.FOUND) // 302
+        return Mono.just(ResponseEntity.status(302)
                 .header(HttpHeaders.SET_COOKIE, cookie.toString())
                 .location(URI.create(authorizeUrl))
                 .build());
@@ -104,9 +130,8 @@ public class AuthController {
             @RequestParam(value = "state", required = false) String state
     ) {
         String cookieState = readCookie(exchange, STATE_COOKIE);
-
         if (cookieState == null || state == null || !cookieState.equals(state)) {
-            return Mono.just(redirect(frontendRedirect + "?error=" + urlEncode("oauth_state")));
+            return Mono.just(redirect(frontendRedirect + "?error=oauth_state"));
         }
 
         return gitHubOAuthService.exchangeCodeForAccessToken(code)
@@ -114,7 +139,7 @@ public class AuthController {
                 .map(profile -> {
                     String email = profile.email();
                     if (email == null || email.isBlank()) {
-                        return redirect(frontendRedirect + "?error=" + urlEncode("no_email"));
+                        return redirect(frontendRedirect + "?error=no_email");
                     }
 
                     email = email.trim().toLowerCase();
@@ -124,14 +149,18 @@ public class AuthController {
                         user = createUserFromGithub(profile.name(), email);
                     }
 
-                    String token = jwtService.issueToken(user.getId(), email);
-                    String safeToken = urlEncode(token);
+                    List<String> roleNames = user.getRoles() == null ? List.of() :
+                            user.getRoles().stream()
+                                    .map(Roles::getRole)
+                                    .filter(r -> r != null && !r.isBlank())
+                                    .distinct()
+                                    .collect(Collectors.toList());
+
+                    String token = jwtService.issueToken(user.getId(), email, roleNames);
+                    String safeToken = java.net.URLEncoder.encode(token, StandardCharsets.UTF_8);
 
                     return redirect(frontendRedirect + "?token=" + safeToken);
-                })
-                .onErrorResume(ex ->
-                        Mono.just(redirect(frontendRedirect + "?error=" + urlEncode("oauth_failed")))
-                );
+                });
     }
 
     private User createUserFromGithub(String name, String email) {
@@ -148,9 +177,7 @@ public class AuthController {
         User user = new User();
         user.setName((name == null || name.isBlank()) ? extractNameFromEmail(email) : name);
         user.setEmail(email);
-
         user.setPassword(UUID.randomUUID().toString());
-
         user.addRole(new Roles(null, defaultRole.getRole(), null));
 
         UUID id = umsRepository.createUser(user);
@@ -172,27 +199,13 @@ public class AuthController {
     }
 
     private static ResponseEntity<Void> redirect(String url) {
-        return ResponseEntity.status(HttpStatus.FOUND).location(URI.create(url)).build();
+        return ResponseEntity.status(302).location(URI.create(url)).build();
     }
 
-    private static Mono<ResponseEntity<Map<String, Object>>> json(
-            HttpStatus httpStatus,
-            String code,
-            String message,
-            Map<String, Object> data
-    ) {
-        Map<String, Object> body = new HashMap<>();
-        body.put(Constants.CODE, code);
-        body.put(Constants.MESSAGE, message);
-        body.put(Constants.DATA, data == null ? Map.of() : data);
-
-        return Mono.just(ResponseEntity.status(httpStatus)
+    private static Mono<ResponseEntity<Map<String, Object>>> okJson(Map<String, Object> body) {
+        return Mono.just(ResponseEntity.ok()
                 .header(Constants.CONTENT_TYPE, Constants.APPLICATION_JSON)
                 .header(Constants.ACCEPT, Constants.APPLICATION_JSON)
                 .body(body));
-    }
-
-    private static String urlEncode(String s) {
-        return java.net.URLEncoder.encode(s, StandardCharsets.UTF_8);
     }
 }

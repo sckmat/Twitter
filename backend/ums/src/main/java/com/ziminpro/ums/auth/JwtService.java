@@ -2,6 +2,7 @@ package com.ziminpro.ums.auth;
 
 import java.time.Instant;
 import java.util.Date;
+import java.util.List;
 import java.util.UUID;
 
 import com.auth0.jwt.JWT;
@@ -36,9 +37,11 @@ public class JwtService {
         this.verifier = JWT.require(algorithm).withIssuer(issuer).build();
     }
 
-    public String issueToken(UUID userId, String email) {
+    public String issueToken(UUID userId, String email,  List<String> roles) {
         Instant now = Instant.now();
         Instant exp = now.plusSeconds(ttlSeconds);
+
+        List<String> safeRoles = roles == null ? List.of() : roles;
 
         return JWT.create()
                 .withIssuer(issuer)
@@ -46,7 +49,14 @@ public class JwtService {
                 .withExpiresAt(Date.from(exp))
                 .withSubject(userId.toString())
                 .withClaim("email", email)
+                .withClaim("roles", safeRoles)
                 .sign(algorithm);
+    }
+
+    public List<String> getRoles(String token) {
+        DecodedJWT jwt = verifier.verify(token);
+        List<String> roles = jwt.getClaim("roles").asList(String.class);
+        return roles == null ? List.of() : roles;
     }
 
     public UUID verifyAndGetUserId(String token) {
