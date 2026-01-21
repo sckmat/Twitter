@@ -1,26 +1,27 @@
 ## Server
 server:
-  port: 8000
+  port: ${SERVER_PORT:8000}
 
-## MySQL
+## Spring / MySQL
 spring:
   datasource:
     driverClassName: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://0.0.0.0:3306/ums?serverTimezone=UTC&useLegacyDatetimeCode=false
-    username: root
-    password: passw
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
 
-# GitHub OAuth
+## GitHub OAuth
 oauth:
   github:
-    client-id: ${GITHUB_CLIENT_ID:Ov23lijRIy7eyahBQs7n}
-    client-secret: ${GITHUB_CLIENT_SECRET:3996e1a8aace9e8810012f0e786f6699d1541622}
-    redirect-uri: ${GITHUB_REDIRECT_URI:http://localhost:8000/auth/github/callback}
-    frontend-redirect: ${FRONTEND_REDIRECT_URI:http://localhost:3000/}
+    client-id: ${GITHUB_CLIENT_ID}
+    client-secret: ${GITHUB_CLIENT_SECRET}
+    redirect-uri: ${GITHUB_REDIRECT_URI:http://app.local:8081/api/ums/auth/github/callback}
+    frontend-redirect: ${FRONTEND_REDIRECT_URI:http://app.local:8081/}
     scope: ${GITHUB_SCOPE:read:user user:email}
 
+## Security / JWT
 security:
   jwt:
-    secret: ${JWT_SECRET:secret}
+    secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:ums}
     ttl-seconds: ${JWT_TTL_SECONDS:86400}

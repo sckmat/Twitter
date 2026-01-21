@@ -1,23 +1,24 @@
 ## Server
 server:
-  port: 8001
+  port: ${SERVER_PORT:8082}
 
-## MySQL
+## Spring / MySQL
 spring:
   datasource:
-    driverClassName: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/twitter?serverTimezone=UTC&useLegacyDatetimeCode=false
-    username: root
-    password: passw
+    url: ${SPRING_DATASOURCE_URL}
+    username: ${SPRING_DATASOURCE_USERNAME}
+    password: ${SPRING_DATASOURCE_PASSWORD}
 
+## UMS service
 ums:
-  host: http://localhost
-  port: 8000
+  host: ${UMS_HOST:http://ums}
+  port: ${UMS_PORT:8081}
   paths:
-    user: /users/user
+    user: ${UMS_PATHS_USER:/users/user}
 
+## Security / JWT
 security:
   jwt:
-    secret: ${JWT_SECRET:secret}
+    secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:ums}
     ttl-seconds: ${JWT_TTL_SECONDS:86400}

@@ -20,13 +20,12 @@ public class CorsConfig {
 
         config.setAllowedOrigins(List.of(
                 "http://localhost:3000",
-                "http://127.0.0.1:3000"
+                "http://127.0.0.1:3000",
+                "http://app.local:8081",
+                "http://localhost:8081"
         ));
-
-        config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
-
-        config.setAllowedHeaders(List.of("Authorization", "Content-Type"));
-
+        config.setAllowedHeaders(List.of("*"));
+        config.setAllowedMethods(List.of("GET","POST","PUT","PATCH","DELETE","OPTIONS"));
         config.setAllowCredentials(false);
 
         config.setMaxAge(3600L);

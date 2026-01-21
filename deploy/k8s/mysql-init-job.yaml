@@ -1,0 +1,192 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-init
+data:
+  init.sql: |
+    CREATE DATABASE IF NOT EXISTS appdb;
+    USE appdb;
+
+    -- --------------------
+    -- UMS tables
+    -- --------------------
+    DROP TABLE IF EXISTS users_has_roles;
+    DROP TABLE IF EXISTS users;
+    DROP TABLE IF EXISTS roles;
+    DROP TABLE IF EXISTS last_visit;
+
+    CREATE TABLE last_visit
+    (
+        id    BINARY(16) NOT NULL,
+        `in`  INT DEFAULT NULL,
+        `out` INT DEFAULT NULL,
+        PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+    CREATE TABLE roles
+    (
+        id          BINARY(16) NOT NULL,
+        name        VARCHAR(45) DEFAULT NULL,
+        description VARCHAR(45) DEFAULT NULL,
+        PRIMARY KEY (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+    CREATE TABLE users
+    (
+        id            BINARY(16) NOT NULL,
+        name          VARCHAR(45) NOT NULL,
+        email         VARCHAR(45) NOT NULL,
+        password      VARCHAR(45) NOT NULL,
+        created       INT DEFAULT NULL,
+        last_visit_id BINARY(16) DEFAULT NULL,
+        PRIMARY KEY (id),
+        UNIQUE KEY email_UNIQUE (email),
+        KEY           fk_users_last_visit_idx (last_visit_id),
+        CONSTRAINT fk_users_last_visit FOREIGN KEY (last_visit_id) REFERENCES last_visit (id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+    CREATE TABLE users_has_roles
+    (
+        users_id BINARY(16) NOT NULL,
+        roles_id BINARY(16) NOT NULL,
+        PRIMARY KEY (users_id, roles_id),
+        KEY      fk_users_has_roles_roles_idx (roles_id),
+        CONSTRAINT fk_users_has_roles_roles FOREIGN KEY (roles_id) REFERENCES roles (id) ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT fk_users_has_roles_users FOREIGN KEY (users_id) REFERENCES users (id) ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
+
+    -- Seed UMS data
+    INSERT INTO last_visit (id, `in`, `out`)
+    VALUES (X'306DCF05D3D64B438E066B6FFE2331FC', 1604249194, 1604249224),
+           (X'3C37571B0F494FED875845BFAE428B29', 1604249181, 1604249209),
+           (X'7AC613D5538745E58C9F9F49A0F271E1', 1604249171, 1604249203),
+           (X'8A0BE660EBC64C47AF813F7123977993', 1604249188, 1604249217),
+           (X'BE76648F49F24FBE9BC434BD8C23C70E', 1604130098, 1604130106);
+
+    INSERT INTO roles (id, name, description)
+    VALUES (X'43DCF1D63AC0429099FD44F9B9F9BECF', 'ADMIN', 'Administrative roles for the system'),
+           (X'B479B3577E2547FA8DBABFDAEECC6C2C', 'SUBSCRIBER', 'Message content consumer'),
+           (X'EB932DBB7005422FA6497190AF39E984', 'PRODUCER', 'Message content producer');
+
+    INSERT INTO users (id, name, email, password, created, last_visit_id)
+    VALUES (X'0DD03A597DBC4D0081073271B3345434', 'Angela Merkel', 'angela@merkel.de', 'password', 1504249224,
+            X'8A0BE660EBC64C47AF813F7123977993'),
+           (X'1CD89E11602A4186AFBFE0149B59EB08', 'Emmanuel Macron', 'emmanuel@macron.fr', 'password', 1504249224,
+            X'BE76648F49F24FBE9BC434BD8C23C70E'),
+           (X'6E27EA06A7164C89AF88813749A8BD48', 'Donald Trump', 'donalt@trump.us', 'password', 1604129987,
+            X'BE76648F49F24FBE9BC434BD8C23C70E'),
+           (X'70A64B5443C34C18BBEC64590FF7E0CC', 'Justing Trudeau', 'justin@trudeau.ca', 'password', 1504249224,
+            X'3C37571B0F494FED875845BFAE428B29'),
+           (X'ABB04B9F5D1040DD9076EB27CA76891A', 'Vladimir Putin', 'vladimir@putin.ru', 'password', 1504249224,
+            X'7AC613D5538745E58C9F9F49A0F271E1');
+
+    INSERT INTO users_has_roles (users_id, roles_id)
+    VALUES (X'0DD03A597DBC4D0081073271B3345434', X'B479B3577E2547FA8DBABFDAEECC6C2C'),
+           (X'1CD89E11602A4186AFBFE0149B59EB08', X'B479B3577E2547FA8DBABFDAEECC6C2C'),
+           (X'1CD89E11602A4186AFBFE0149B59EB08', X'EB932DBB7005422FA6497190AF39E984'),
+           (X'6E27EA06A7164C89AF88813749A8BD48', X'B479B3577E2547FA8DBABFDAEECC6C2C'),
+           (X'6E27EA06A7164C89AF88813749A8BD48', X'EB932DBB7005422FA6497190AF39E984'),
+           (X'70A64B5443C34C18BBEC64590FF7E0CC', X'B479B3577E2547FA8DBABFDAEECC6C2C'),
+           (X'ABB04B9F5D1040DD9076EB27CA76891A', X'B479B3577E2547FA8DBABFDAEECC6C2C');
+
+    -- --------------------
+    -- Twitter tables
+    -- --------------------
+    DROP TABLE IF EXISTS messages;
+    DROP TABLE IF EXISTS subscriptions;
+    DROP TABLE IF EXISTS subscribers;
+    DROP TABLE IF EXISTS producers;
+
+    CREATE TABLE producers
+    (
+        producer_id BINARY(16) NOT NULL,
+        PRIMARY KEY (producer_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+    CREATE TABLE subscribers
+    (
+        subscriber_id BINARY(16) NOT NULL,
+        PRIMARY KEY (subscriber_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+    CREATE TABLE subscriptions
+    (
+        subscriber_id BINARY(16) NOT NULL,
+        producer_id   BINARY(16) NOT NULL,
+        PRIMARY KEY (subscriber_id, producer_id),
+        KEY           fk_subscriptions_producers_idx (producer_id),
+        KEY           fk_subscriptions_subscribers_idx (subscriber_id),
+        CONSTRAINT fk_subscriptions_producers FOREIGN KEY (producer_id) REFERENCES producers (producer_id) ON DELETE CASCADE ON UPDATE CASCADE,
+        CONSTRAINT fk_subscriptions_subscribers FOREIGN KEY (subscriber_id) REFERENCES subscribers (subscriber_id) ON DELETE CASCADE ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+    CREATE TABLE messages
+    (
+        id          BINARY(16) NOT NULL,
+        producer_id BINARY(16) NOT NULL,
+        content     VARCHAR(140) DEFAULT NULL,
+        created     INT          DEFAULT NULL,
+        PRIMARY KEY (id, producer_id),
+        KEY         fk_messages_producers_idx (producer_id),
+        CONSTRAINT fk_messages_producers1 FOREIGN KEY (producer_id) REFERENCES producers (producer_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+    -- Seed Twitter data
+    INSERT INTO producers (producer_id)
+    VALUES (X'1CD89E11602A4186AFBFE0149B59EB08'),
+           (X'6E27EA06A7164C89AF88813749A8BD48');
+
+    INSERT INTO subscribers (subscriber_id)
+    VALUES (X'70A64B5443C34C18BBEC64590FF7E0CC');
+
+    INSERT INTO subscriptions (subscriber_id, producer_id)
+    VALUES (X'70A64B5443C34C18BBEC64590FF7E0CC', X'1CD89E11602A4186AFBFE0149B59EB08');
+
+    INSERT INTO messages (id, producer_id, content, created)
+    VALUES (X'462894B2B5A14088B7AF701C71D6D304', X'6E27EA06A7164C89AF88813749A8BD48', 'Who is subscribed to Mr. Trump?',
+            1605194769),
+           (X'B7A1C8D5C04E4FE38F986392BB751AD9', X'6E27EA06A7164C89AF88813749A8BD48', 'And here Mr. Trump come again',
+            1605194747),
+           (X'DF7E3D8FE19A4458BAD64BE7585200F5', X'1CD89E11602A4186AFBFE0149B59EB08',
+            'Mr. Macron would like to say hello!', 1605197637),
+           (X'E5C6F13A76D648B681F020B74FA9F04C', X'6E27EA06A7164C89AF88813749A8BD48',
+            'Donald Trump posted his first message', 1605194709),
+           (X'FCCC455BFF284DFD8153F07C0F869118', X'1CD89E11602A4186AFBFE0149B59EB08',
+            'Now France President is here as well', 1605195323);
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: mysql-init
+spec:
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 300
+  template:
+    metadata:
+      labels:
+        app: twitter
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: mysql-init
+          image: mysql:8.0
+          envFrom:
+            - secretRef:
+                name: mysql-secret
+          volumeMounts:
+            - name: init
+              mountPath: /init
+          command: ["sh", "-c"]
+          args:
+            - |
+              echo "Waiting for mysql..."
+              until mysqladmin ping -h mysql -uroot -p"$MYSQL_ROOT_PASSWORD" --silent; do
+                sleep 2
+              done
+              echo "Running init.sql..."
+              mysql -h mysql -uroot -p"$MYSQL_ROOT_PASSWORD" < /init/init.sql
+              echo "Done."
+      volumes:
+        - name: init
+          configMap:
+            name: mysql-init
